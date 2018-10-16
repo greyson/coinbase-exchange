@@ -3,176 +3,87 @@
 {-# LANGUAGE OverloadedStrings     #-}
 
 module Coinbase.Exchange.Rest
-    ( coinbaseGet
-    , coinbasePost
-    , coinbaseDelete
-    , coinbaseDeleteDiscardBody
-    , voidBody
+    ( makeRequest
+    , module Coinbase.Exchange.Types
     ) where
 
-import           Control.Monad.Except
-import           Control.Monad.Reader
-import           Control.Monad.Trans.Resource
+import           Coinbase.Exchange.Internal hiding ( Request )
+import qualified Coinbase.Exchange.Internal as I
+import           Coinbase.Exchange.Types
 import           Crypto.Hash
 import           Data.Aeson
-import           Data.Byteable
-import qualified Data.ByteString              as BS
+import           Data.Byteable                (toBytes)
 import qualified Data.ByteString.Base64       as Base64
 import qualified Data.ByteString.Char8        as CBS
 import qualified Data.ByteString.Lazy         as LBS
-import           Data.Conduit
-import           Data.Conduit.Attoparsec      (sinkParser)
-import qualified Data.Conduit.Binary          as CB
-import qualified Data.Text                    as T
-import qualified Data.Text.Encoding           as T
-import           Data.Time
-import           Data.Time.Clock.POSIX
-import           Network.HTTP.Conduit
-import           Network.HTTP.Types
-import           Text.Printf
-
-import           Coinbase.Exchange.Types
+import           Data.List                    (intercalate)
+import           Data.Time                    (UTCTime)
+import           Data.Time.Clock.POSIX        (utcTimeToPOSIXSeconds)
+import qualified Network.HTTP.Client          as HTTP
+import qualified Network.HTTP.Types           as HTTP
 
 import           Debug.Trace
 
-type Signed = Bool
 type IsForExchange = Bool
 
-voidBody :: Maybe ()
-voidBody = Nothing
-
-coinbaseGet :: ( ToJSON a
-               , FromJSON b
-               , MonadResource m
-               , MonadReader ExchangeConf m
-               , MonadError ExchangeFailure m )
-            => Signed -> Path -> Maybe a -> m b
-coinbaseGet sgn p ma = coinbaseRequest "GET" sgn p ma >>= processResponse True
-
-coinbasePost :: ( ToJSON a
-                , FromJSON b
-                , MonadResource m
-                , MonadReader ExchangeConf m
-                , MonadError ExchangeFailure m )
-             => Signed -> Path -> Maybe a -> m b
-coinbasePost sgn p ma = coinbaseRequest "POST" sgn p ma >>= processResponse True
-
-coinbaseDelete :: ( ToJSON a
-                  , FromJSON b
-                  , MonadResource m
-                  , MonadReader ExchangeConf m
-                  , MonadError ExchangeFailure m )
-               => Signed -> Path -> Maybe a -> m b
-coinbaseDelete sgn p ma = coinbaseRequest "DELETE" sgn p ma >>= processResponse True
-
-coinbaseDeleteDiscardBody :: ( ToJSON a
-                             , MonadResource m
-                             , MonadReader ExchangeConf m
-                             , MonadError ExchangeFailure m )
-                             => Signed -> Path -> Maybe a -> m ()
-coinbaseDeleteDiscardBody sgn p ma = coinbaseRequest "DELETE" sgn p ma >>= processEmpty
-
-coinbaseRequest :: ( ToJSON a
-                   , MonadResource m
-                   , MonadReader ExchangeConf m
-                   , MonadError ExchangeFailure m )
-                => Method -> Signed -> Path -> Maybe a -> m (Response (ResumableSource m BS.ByteString))
-coinbaseRequest meth sgn p ma = do
-        conf <- ask
-        req  <- case apiType conf of
-                    Sandbox -> parseUrlThrow $ sandboxRest ++ p
-                    Live    -> parseUrlThrow $ liveRest ++ p
-        let req' = req { method         = meth
-                       , requestHeaders = [ ("user-agent", "haskell")
-                                          , ("accept", "application/json")
-                                          ]
-                       }
-
-        flip http (manager conf) =<< signMessage True sgn meth p
-                                 =<< encodeBody ma req'
-
-realCoinbaseRequest :: ( ToJSON a
-                           , MonadResource m
-                           , MonadReader ExchangeConf m
-                           , MonadError ExchangeFailure m )
-                        => Method -> Signed -> Path -> Maybe a -> m (Response (ResumableSource m BS.ByteString))
-realCoinbaseRequest meth sgn p ma = do
-        conf <- ask
-        req  <- case apiType conf of
-                    Sandbox -> parseUrlThrow $ sandboxRealCoinbaseRest ++ p
-                    Live    -> parseUrlThrow $ liveRealCoinbaseRest ++ p
-        let req' = req { method         = meth
-                       , requestHeaders = [ ("user-agent", "haskell")
-                                          , ("accept", "application/json")
-                                          , ("content-type", "application/json")
-                                          ]
-                       }
-
-        flip http (manager conf) =<< signMessage False sgn meth p
-                                 =<< encodeBody ma req'
-
-encodeBody :: (ToJSON a, Monad m)
-           => Maybe a -> Request -> m Request
-encodeBody (Just a) req = return req
-                            { requestHeaders = requestHeaders req ++
-                                               [ ("content-type", "application/json") ]
-                            , requestBody = RequestBodyBS $ LBS.toStrict $ encode a
-                            }
-encodeBody Nothing  req = return req
-
-signMessage :: (MonadIO m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
-            => IsForExchange -> Signed -> Method -> Path -> Request -> m Request
-signMessage isForExchange True meth p req = do
-        conf <- ask
-        case authToken conf of
-            Just tok -> do time <- liftM (realToFrac . utcTimeToPOSIXSeconds) (liftIO getCurrentTime)
-                                    >>= \t -> return . CBS.pack $ printf "%.0f" (t::Double)
-                           rBody <- pullBody $ requestBody req
-                           let presign = CBS.concat [time, meth, CBS.pack p, rBody]
-                               sign    = if isForExchange
-                                            then Base64.encode         $ toBytes       (hmac (secret tok)                 presign :: HMAC SHA256)
-                                            else digestToHexByteString $ hmacGetDigest (hmac (Base64.encode $ secret tok) presign :: HMAC SHA256)
-
-                           return req
-                                { requestBody    = RequestBodyBS rBody
-                                , requestHeaders = requestHeaders req ++
-                                       [ ("cb-access-key", key tok)
-                                       , ("cb-access-sign", sign )
-                                       , ("cb-access-timestamp", time)
-                                       ] ++ if isForExchange
-                                                then [("cb-access-passphrase", passphrase tok)]
-                                                else [("cb-version", "2016-05-11")]
-                                }
-            Nothing  -> throwError $ AuthenticationRequiredFailure $ T.pack p
-    where pullBody (RequestBodyBS  b) = return b
-          pullBody (RequestBodyLBS b) = return $ LBS.toStrict b
-          pullBody _                  = throwError AuthenticationRequiresByteStrings
-signMessage _ False _ _ req = return req
-
+-- | Build an `Network.HTTP.Client.Request` from a Coinbase request
 --
+-- Since this is entirely pure, it can be combined into Conduit,
+-- Pipes, IO, or any other HTTP stacks that you please.
+makeRequest :: (ToJSON body)
+            => ExchangeConf -> I.Request body response
+            -> UTCTime -> HTTP.Request
+makeRequest conf r timestamp
+  | reqSigning r = signMessage conf False params req timestamp
+  | otherwise    = req
+  where
+    req = encodeBody (reqBody r) emptyReq
+    emptyReq = (HTTP.parseRequest_ url)
+      { HTTP.method = HTTP.renderStdMethod (reqMethod r)
+      , HTTP.requestHeaders = [ ("user-agent", "haskell-simple")
+                              , ("accept", "application/json") ]
+      }
+    url = concat [ endpoint, reqPath r, params ]
+    endpoint = endpointRest $ apiType conf
+    params
+      | null (reqParams r) = ""
+      | otherwise = intercalate "&"
+        $ map (\(k,v) -> k ++ "=" ++ deUrlEncode v)
+        $ reqParams r
 
-processResponse :: ( FromJSON b
-                   , MonadResource m
-                   , MonadReader ExchangeConf m
-                   , MonadError ExchangeFailure m )
-                => IsForExchange -> Response (ResumableSource m BS.ByteString) -> m b
-processResponse isForExchange res =
-    case responseStatus res of
-        s | s == status200 || (s == created201 && not isForExchange) ->
-            do body <- responseBody res $$+- sinkParser (fmap (\x -> {-trace (show x)-} fromJSON x) json)
-               case body of
-                   Success b -> return b
-                   Error  er -> throwError $ ParseFailure $ T.pack er
+encodeBody :: (ToJSON a) => Maybe a -> HTTP.Request -> HTTP.Request
+encodeBody Nothing  r = r
+encodeBody (Just a) r  = r
+    { HTTP.requestHeaders = HTTP.requestHeaders r ++
+      [ ("content-type", "application/json") ]
+    , HTTP.requestBody = HTTP.RequestBodyBS $ LBS.toStrict $ encode a
+    }
 
-          | otherwise -> do body <- responseBody res $$+- CB.sinkLbs
-                            throwError $ ApiFailure $ T.decodeUtf8 $ LBS.toStrict body
+signMessage conf isForExchange p req timestamp =
+  case authToken conf of
+    Nothing -> error "Coinbase Authentication information required."
+    Just tok ->
+      let
+        time = CBS.pack $ show $ round $ utcTimeToPOSIXSeconds timestamp
+        presign = CBS.concat [ time, HTTP.method req, CBS.pack p
+                             , pullBody (HTTP.requestBody req) ]
+        signature = if isForExchange
+          then Base64.encode $ toBytes $
+               (hmac (secret tok) presign :: HMAC SHA256)
+          else digestToHexByteString $ hmacGetDigest
+               (hmac (Base64.encode $ secret tok) presign :: HMAC SHA256)
+      in
+         req{ HTTP.requestHeaders = HTTP.requestHeaders req ++
+              [ ("cb-access-key", key tok)
+              , ("cb-access-sign", signature)
+              , ("cb-access-timestamp", time)
+              , if isForExchange
+                then ("cb-access-passphrase", passphrase tok)
+                else ("cb-version", "2016-05-11")
+              ]
+            }
 
-processEmpty :: ( MonadResource m
-                , MonadReader ExchangeConf m
-                , MonadError ExchangeFailure m )
-             => Response (ResumableSource m BS.ByteString) -> m ()
-processEmpty res =
-    case responseStatus res of
-        s | s == status200 -> return ()
-          | otherwise      -> do body <- responseBody res $$+- CB.sinkLbs
-                                 throwError $ ApiFailure $ T.decodeUtf8 $ LBS.toStrict body
+  where pullBody (HTTP.RequestBodyBS  b) = b
+        pullBody (HTTP.RequestBodyLBS b) = LBS.toStrict b
+        pullBody _                  =
+          error "Need a bytestring body for authentication"

@@ -22,13 +22,13 @@ module Coinbase.Exchange.MarketData
     , module Coinbase.Exchange.Types.MarketData
     ) where
 
+import           Coinbase.Exchange.Internal
 import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.Trans.Resource
 import           Data.List
 import qualified Data.Text                          as T
 import           Data.Time
-import           Data.UUID.Aeson                    ()
 
 #if MIN_VERSION_time(1,5,0)
 import           Data.Time.Format                   (defaultTimeLocale)
@@ -41,73 +41,67 @@ import           Coinbase.Exchange.Types
 import           Coinbase.Exchange.Types.Core
 import           Coinbase.Exchange.Types.MarketData
 
+import           Network.HTTP.Types (StdMethod(..))
+
+-- this is the only request type we'll need for this module
+get path = request endpointRest GET False path Nothing
+
 -- Products
 
-getProducts :: (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
-            => m [Product]
-getProducts = coinbaseGet False "/products" voidBody
+getProducts = get "/products"
 
 -- Order Book
 
-getTopOfBook :: (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
-             => ProductId -> m (Book Aggregate)
-getTopOfBook (ProductId p) = coinbaseGet False ("/products/" ++ T.unpack p ++ "/book?level=1") voidBody
+getTopOfBook :: ProductId -> Request () (Book Aggregate)
+getTopOfBook p = get ("/products/" ++ urlParam p ++ "/book?level=1")
 
-getTop50OfBook :: (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
-               => ProductId -> m (Book Aggregate)
-getTop50OfBook (ProductId p) = coinbaseGet False ("/products/" ++ T.unpack p ++ "/book?level=2") voidBody
+getTop50OfBook :: ProductId -> Request () (Book Aggregate)
+getTop50OfBook p = get ("/products/" ++ urlParam p ++ "/book?level=2")
 
-getOrderBook :: (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
-             => ProductId -> m (Book OrderId)
-getOrderBook (ProductId p) = coinbaseGet False ("/products/" ++ T.unpack p ++ "/book?level=3") voidBody
+getOrderBook :: ProductId -> Request () (Book OrderId)
+getOrderBook p = get ("/products/" ++ urlParam p ++ "/book?level=3")
 
 -- Product Ticker
 
-getProductTicker :: (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
-                 => ProductId -> m Tick
-getProductTicker (ProductId p) = coinbaseGet False ("/products/" ++ T.unpack p ++ "/ticker") voidBody
+getProductTicker :: ProductId -> Request () Tick
+getProductTicker p = get ("/products/" ++ urlParam p ++ "/ticker")
 
 -- Product Trades
 
--- | Currently Broken: coinbase api doesn't return valid ISO 8601 dates for this route.
-getTrades :: (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
-          => ProductId -> m [Trade]
-getTrades (ProductId p) = coinbaseGet False ("/products/" ++ T.unpack p ++ "/trades") voidBody
+getTrades :: ProductId -> Request () [Trade]
+getTrades p = get ("/products/" ++ urlParam p ++ "/trades")
 
 -- Historic Rates (Candles)
+
+-- | Currently Broken:
+-- coinbase api doesn't return valid ISO 8601 dates for this route.
+
+newtype BrokenUTCTime = BrokenUTCTime { realTime :: UTCTime }
+instance UrlEncode BrokenUTCTime where
+  urlParam (BrokenUTCTime t) = formatTime defaultTimeLocale "%FT%T." t
 
 type StartTime  = UTCTime
 type EndTime    = UTCTime
 type Scale      = Int
 
-getHistory :: (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
-           => ProductId -> Maybe StartTime -> Maybe EndTime -> Maybe Scale -> m [Candle]
-getHistory (ProductId p) start end scale = coinbaseGet False path voidBody
-    where path   = "/products/" ++ T.unpack p ++ "/candles?" ++ params
-          params = intercalate "&" $ map (\(k, v) -> k ++ "=" ++ v) $ start' ++ end' ++ scale'
-          start' = case start of Nothing -> []
-                                 Just  t -> [(      "start",  fmt t)]
-          end'   = case end   of Nothing -> []
-                                 Just  t -> [(        "end",  fmt t)]
-          scale' = case scale of Nothing -> []
-                                 Just  s -> [("granularity", show s)]
-          fmt t  = let t' = formatTime defaultTimeLocale "%FT%T." t
-                    in t' ++ take 6 (formatTime defaultTimeLocale "%q" t) ++ "Z"
+getHistory :: ProductId -> Maybe StartTime -> Maybe EndTime -> Maybe Scale
+           -> Request () [Candle]
+getHistory p start end scale = get ("/products/" ++ urlParam p ++ "/candles")
+  .&? (      "start", BrokenUTCTime <$> start)
+  .&? (        "end", BrokenUTCTime <$> end)
+  .&? ("granularity", scale)
 
 -- Product Stats
 
-getStats :: (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
-         => ProductId -> m Stats
-getStats (ProductId p) = coinbaseGet False ("/products/" ++ T.unpack p ++ "/stats") voidBody
+getStats :: ProductId -> Request () Stats
+getStats p = get ("/products/" ++ urlParam p ++ "/stats")
 
 -- Exchange Currencies
 
-getCurrencies :: (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
-              => m [Currency]
-getCurrencies = coinbaseGet False "/currencies" voidBody
+getCurrencies :: Request () [Currency]
+getCurrencies = get "/currencies"
 
 -- Exchange Time
 
-getExchangeTime :: (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
-                => m ExchangeTime
-getExchangeTime = coinbaseGet False "/time" voidBody
+getExchangeTime :: Request () ExchangeTime
+getExchangeTime = get "/time"

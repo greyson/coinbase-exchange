@@ -13,12 +13,9 @@ module Coinbase.Exchange.Types
     , Path
 
     , website
-    , sandboxRest
-    , sandboxSocket
-    , liveRest
-    , liveSocket
-    , liveRealCoinbaseRest
-    , sandboxRealCoinbaseRest
+    , endpointRest
+    , endpointSocket
+    , endpointRealRest
 
     , Key
     , Secret
@@ -37,19 +34,18 @@ module Coinbase.Exchange.Types
     , ExchangeT
     , ExceptT
     , runExchange
-    , runExchangeT
     , execExchange
     , execExchangeT
 
     , getManager
     ) where
 
+import           Coinbase.Exchange.Internal
 import           Control.Applicative
 import           Control.Monad.Base
 import           Control.Monad.Catch
 import           Control.Monad.Except
 import           Control.Monad.Reader
-import           Control.Monad.Trans.Resource
 import           Data.ByteString
 import qualified Data.ByteString.Base64       as Base64
 import           Data.Data
@@ -59,36 +55,11 @@ import           Network.HTTP.Conduit
 
 -- API URLs
 
-data ApiType
-    = Sandbox
-    | Live
-    deriving (Show)
-
 type Endpoint = String
 type Path     = String
 
 website :: Endpoint
 website = "https://public.sandbox.gdax.com"
-
-sandboxRest :: Endpoint
-sandboxRest = "https://api-public.sandbox.gdax.com"
-
-sandboxSocket :: Endpoint
-sandboxSocket = "ws-feed-public.sandbox.gdax.com"
-
-liveRest :: Endpoint
-liveRest = "https://api.gdax.com"
-
-liveSocket :: Endpoint
-liveSocket = "ws-feed.gdax.com"
-
--- Coinbase needs to provide real BTC transfers through the exchange API soon,
--- making 2 API calls with 2 sets of authentication credentials is ridiculous.
-liveRealCoinbaseRest :: Endpoint
-liveRealCoinbaseRest = "https://api.coinbase.com"
-
-sandboxRealCoinbaseRest :: Endpoint
-sandboxRealCoinbaseRest = "https://api.sandbox.coinbase.com"
 
 -- Monad Stack
 
@@ -125,27 +96,22 @@ instance Exception ExchangeFailure
 
 type Exchange a = ExchangeT IO a
 
-newtype ExchangeT m a = ExchangeT { unExchangeT :: ResourceT (ReaderT ExchangeConf (ExceptT ExchangeFailure m)) a }
-    deriving ( Functor, Applicative, Monad, MonadIO, MonadThrow
-             , MonadError ExchangeFailure
-             , MonadReader ExchangeConf
-             )
-
-deriving instance (MonadBase IO m) => MonadBase IO (ExchangeT m)
-deriving instance (Monad m, MonadThrow m, MonadIO m, MonadBase IO m) => MonadResource (ExchangeT m)
+newtype ExchangeT m a = ExchangeT {
+  unExchangeT :: ReaderT ExchangeConf (ExceptT ExchangeFailure m) a }
+  deriving ( Functor, Applicative, Monad, MonadIO, MonadThrow
+           , MonadError ExchangeFailure
+           , MonadReader ExchangeConf
+           )
 
 runExchange :: ExchangeConf -> Exchange a -> IO (Either ExchangeFailure a)
-runExchange = runExchangeT
-
-runExchangeT :: MonadBaseControl IO m => ExchangeConf -> ExchangeT m a -> m (Either ExchangeFailure a)
-runExchangeT conf = runExceptT . flip runReaderT conf . runResourceT . unExchangeT
+runExchange conf = runExceptT . flip runReaderT conf . unExchangeT
 
 execExchange :: ExchangeConf -> Exchange a -> IO a
 execExchange = execExchangeT
 
-execExchangeT :: (MonadThrow m, MonadBaseControl IO m) => ExchangeConf -> ExchangeT m a -> m a
+execExchangeT :: (MonadThrow m) => ExchangeConf -> ExchangeT m a -> m a
 execExchangeT conf act = do
-    v <- runExceptT . flip runReaderT conf . runResourceT . unExchangeT $ act
+    v <- runExceptT . flip runReaderT conf . unExchangeT $ act
     case v of
         Left er -> throwM er
         Right v -> return v

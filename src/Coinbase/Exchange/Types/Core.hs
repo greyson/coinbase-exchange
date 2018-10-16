@@ -4,6 +4,7 @@
 
 module Coinbase.Exchange.Types.Core where
 
+import           Coinbase.Exchange.Internal
 import           Control.Applicative
 import           Control.DeepSeq
 import           Control.Monad
@@ -20,14 +21,16 @@ import           Data.Text           (Text)
 import qualified Data.Text           as T
 import           Data.Time
 import           Data.UUID
-import           Data.UUID.Aeson     ()
 import           Data.Word
 import           GHC.Generics
 import           Text.Read           (readMaybe)
 
 
 newtype ProductId = ProductId { unProductId :: Text }
-    deriving (Eq, Ord, Show, Read, Data, Typeable, Generic, IsString, NFData, Hashable, FromJSON, ToJSON)
+    deriving ( Eq, Ord, Show, Read, Data, Typeable
+             , Generic, IsString, NFData, Hashable, FromJSON, ToJSON)
+
+instance UrlEncode ProductId where urlParam = T.unpack . unProductId
 
 newtype Price = Price { unPrice :: CoinScientific }
     deriving (Eq, Ord, Num, Fractional, Real, RealFrac, Read, Data, Typeable, Generic, NFData, Hashable, FromJSON)
@@ -52,6 +55,8 @@ instance Show Cost where
 
 newtype OrderId = OrderId { unOrderId :: UUID }
     deriving (Eq, Ord, Show, Read, Data, Typeable, Generic, NFData, Hashable, FromJSON, ToJSON)
+instance UrlEncode OrderId where
+  urlParam = toString . unOrderId
 
 newtype Aggregate = Aggregate { unAggregate :: Int64 }
     deriving (Eq, Ord, Show, Read, Num, Data, Typeable, Generic, NFData, Hashable, FromJSON, ToJSON)
@@ -115,6 +120,8 @@ instance ToJSON OrderStatus where
     toJSON = genericToJSON coinbaseAesonOptions
 instance FromJSON OrderStatus where
     parseJSON = genericParseJSON coinbaseAesonOptions
+instance UrlEncode OrderStatus where
+  urlParam = map toLower . show
 
 --
 

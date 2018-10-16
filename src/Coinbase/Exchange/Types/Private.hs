@@ -21,6 +21,7 @@ import           Data.UUID
 import           Data.Word
 import           GHC.Generics
 
+import           Coinbase.Exchange.Internal
 import           Coinbase.Exchange.Types
 import           Coinbase.Exchange.Types.Core
 
@@ -28,6 +29,8 @@ import           Coinbase.Exchange.Types.Core
 
 newtype AccountId = AccountId { unAccountId :: UUID }
     deriving (Eq, Ord, Show, Read, Data, Typeable, Generic, NFData, Hashable, FromJSON, ToJSON)
+instance UrlEncode AccountId where
+  urlParam = toString . unAccountId
 
 data Account
     = Account
@@ -693,6 +696,8 @@ instance FromJSON CoinbaseAccount where
 
 newtype ReportId = ReportId { unReportId :: UUID }
     deriving (Eq, Ord, Show, Read, Data, Typeable, Generic, NFData, FromJSON, ToJSON)
+instance UrlEncode ReportId where
+  urlParam = toString . unReportId
 
 data ReportType
     = FillsReport

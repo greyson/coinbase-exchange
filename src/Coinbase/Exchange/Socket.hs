@@ -23,8 +23,7 @@ subscribe atype pids app = withSocketsDo $
         runSecureClient location 443 "/" $ \conn -> do
             WS.sendTextData conn $ encode (Subscribe pids)
             app conn
-    where location = case atype of Sandbox -> sandboxSocket
-                                   Live    -> liveSocket
+    where location = endpointSocket atype
 
 
 -------------------------------------------------------------------------------

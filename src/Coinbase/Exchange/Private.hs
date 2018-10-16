@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
@@ -33,83 +34,75 @@ import           Data.List
 import qualified Data.Text                       as T
 import           Data.UUID
 
+import           Coinbase.Exchange.Internal
 import           Coinbase.Exchange.Rest
 import           Coinbase.Exchange.Types
 import           Coinbase.Exchange.Types.Core
 import           Coinbase.Exchange.Types.Private
 
+import           Network.HTTP.Types (StdMethod(..))
+
+get = request endpointRest GET True
+
+post :: String -> Maybe a -> Request a b
+post = request endpointRest POST True
+
 -- Accounts
 
-getAccountList :: (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
-               => m [Account]
-getAccountList = coinbaseGet True "/accounts" voidBody
+getAccountList :: Request () [Account]
+getAccountList = get "/accounts" Nothing
 
-getAccount :: (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
-           => AccountId -> m Account
-getAccount (AccountId i) = coinbaseGet True ("/accounts/" ++ toString i) voidBody
+getAccount :: AccountId -> Request () Account
+getAccount i = get ("/accounts/" ++ urlParam i) Nothing
 
-getAccountLedger :: (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
-                 => AccountId -> m [Entry]
-getAccountLedger (AccountId i) = coinbaseGet True ("/accounts/" ++ toString i ++ "/ledger") voidBody
+getAccountLedger :: AccountId -> Request () [Entry]
+getAccountLedger i = get ("/accounts/" ++ urlParam i) Nothing
 
-getAccountHolds :: (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
-                => AccountId -> m [Hold]
-getAccountHolds (AccountId i) = coinbaseGet True ("/accounts/" ++ toString i ++ "/holds") voidBody
+getAccountHolds :: AccountId -> Request () [Hold]
+getAccountHolds i = get ("/accounts/" ++ urlParam i ++ "/holds") Nothing
 
 -- Orders
 
-createOrder :: (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
-            => NewOrder -> m OrderId
-createOrder = liftM ocId . coinbasePost True "/orders" . Just
+createOrder :: NewOrder -> Request NewOrder OrderConfirmation
+createOrder o = post "/orders" (Just o)
 
-cancelOrder :: (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
-            => OrderId -> m ()
-cancelOrder (OrderId o) = coinbaseDeleteDiscardBody True ("/orders/" ++ toString o) voidBody
+cancelOrder :: OrderId -> Request () Void
+cancelOrder o = post ("/orders/" ++ urlParam o) Nothing
 
-cancelAllOrders :: (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
-                => Maybe ProductId -> m [OrderId]
-cancelAllOrders prodId = coinbaseDelete True ("/orders" ++ opt prodId) voidBody
-    where opt Nothing   = ""
-          opt (Just id) = "?product_id=" ++ T.unpack (unProductId id)
+cancelAllOrders :: Maybe ProductId -> Request () [OrderId]
+cancelAllOrders prodId = post "/orders" Nothing
+  .&? ("product_id", prodId)
 
-getOrderList :: (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
-             => [OrderStatus] -> m [Order]
-getOrderList os = coinbaseGet True ("/orders?" ++ query os) voidBody
-    where query [] = "status=open&status=pending&status=active"
-          query xs = intercalate "&" $ map (\x -> "status=" ++ map toLower (show x)) xs
+getOrderList :: [OrderStatus] -> Request () [Order]
+getOrderList [] =
+  getOrderList [ Open, Pending, Active ]
+getOrderList os =
+  foldr (\s r -> r .& ("status", s)) (get "/orders" Nothing) os
 
-getOrder :: (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
-         => OrderId -> m Order
-getOrder (OrderId o) = coinbaseGet True ("/orders/" ++ toString o) voidBody
+getOrder :: OrderId -> Request () Order
+getOrder o = get ("/orders/" ++ urlParam o) Nothing
 
 -- Fills
 
-getFills :: (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
-         => Maybe OrderId -> Maybe ProductId -> m [Fill]
-getFills moid mpid = coinbaseGet True ("/fills?" ++ oid ++ "&" ++ pid) voidBody
-    where oid = case moid of Just  v -> "order_id=" ++ toString (unOrderId v)
-                             Nothing -> ""
-          pid = case mpid of Just  v -> "product_id=" ++ T.unpack (unProductId v)
-                             Nothing -> ""
+getFills :: Maybe OrderId -> Maybe ProductId -> Request () [Fill]
+getFills moid mpid = get "/fills" Nothing
+  .&? (  "order_id", moid)
+  .&? ("product_id", mpid)
 
 -- Transfers
 
-createTransfer :: (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
-               => TransferToCoinbase -> m TransferToCoinbaseResponse
-createTransfer = coinbasePost True "/transfers" . Just
+createTransfer :: TransferToCoinbase
+               -> Request TransferToCoinbase TransferToCoinbaseResponse
+createTransfer = post "/transfers" . Just
 
-createCryptoWithdrawal
-    :: (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
-    => CryptoWithdrawal
-    -> m CryptoWithdrawalResp
-createCryptoWithdrawal = coinbasePost True "/withdrawals/crypto" . Just
+createCryptoWithdrawal :: CryptoWithdrawal
+                       -> Request CryptoWithdrawal CryptoWithdrawalResp
+createCryptoWithdrawal = post "/withdrawals/crypto" . Just
 
 -- Reports
 
-createReport :: (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
-             => ReportRequest -> m ReportInfo
-createReport = coinbasePost True "/reports" . Just
+createReport :: ReportRequest -> Request ReportRequest ReportInfo
+createReport = post "/reports" . Just
 
-getReportStatus :: (MonadResource m, MonadReader ExchangeConf m, MonadError ExchangeFailure m)
-             => ReportId -> m ReportInfo
-getReportStatus (ReportId r) = coinbaseGet True ("/reports/" ++ toString r) voidBody
+getReportStatus :: ReportId -> Request () ReportInfo
+getReportStatus r = get  ("/reports/" ++ urlParam r) Nothing
