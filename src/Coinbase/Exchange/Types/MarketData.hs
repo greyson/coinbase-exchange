@@ -24,7 +24,7 @@ import qualified Data.Vector                  as V
 import           Data.Word
 import           GHC.Generics
 
-import           Coinbase.Exchange.Types.Core hiding (OrderStatus (..))
+import           Coinbase.Exchange.Types.Core
 
 -- Products
 
@@ -118,63 +118,52 @@ instance FromJSON Trade where
 
 -- Historic Rates (Candles)
 
-data Candle = Candle UTCTime Low High Open Close Volume
-    deriving (Show, Data, Typeable, Generic)
+data Candle = Candle
+  { cUTCTime :: UTCTime
+  , cLow :: Price
+  , cHigh :: Price
+  , cOpen :: Price
+  , cClose :: Price
+  , cVolume :: Quantity
+  }
+  deriving (Show, Data, Typeable, Generic)
 
 instance NFData Candle
 instance FromJSON Candle where
-    parseJSON (Array v)
-        = case V.length v of
-            6 -> Candle <$> liftM (posixSecondsToUTCTime . fromIntegral) (parseJSON (v V.! 0) :: Parser Int64)
-                        <*> parseJSON (v V.! 1)
-                        <*> parseJSON (v V.! 2)
-                        <*> parseJSON (v V.! 3)
-                        <*> parseJSON (v V.! 4)
-                        <*> parseJSON (v V.! 5)
-            _ -> mzero
-    parseJSON _ = mzero
-
-newtype Low = Low { unLow :: Double }
-    deriving (Eq, Ord, Num, Fractional, Real, RealFrac, Show, Read, Data, Typeable, Generic, NFData, Hashable, FromJSON, ToJSON)
-
-newtype High = High { unHigh :: Double }
-    deriving (Eq, Ord, Num, Fractional, Real, RealFrac, Show, Read, Data, Typeable, Generic, NFData, Hashable, FromJSON, ToJSON)
-
-newtype Open = Open { unOpen :: Double }
-    deriving (Eq, Ord, Num, Fractional, Real, RealFrac, Show, Read, Data, Typeable, Generic, NFData, Hashable, FromJSON, ToJSON)
-
-newtype Close = Close { unClose :: Double }
-    deriving (Eq, Ord, Num, Fractional, Real, RealFrac, Show, Read, Data, Typeable, Generic, NFData, Hashable, FromJSON, ToJSON)
-
-newtype Volume = Volume { unVolume :: Double }
-    deriving (Eq, Ord, Num, Fractional, Real, RealFrac, Show, Read, Data, Typeable, Generic, NFData, Hashable, FromJSON, ToJSON)
+    parseJSON = fmap candle . parseJSON
+      where candle (t, lo, hi, op, cl, v) =
+              Candle (posixSecondsToUTCTime $ fromIntegral (t :: Int64))
+              (Price lo) (Price hi) (Price op) (Price cl)
+              (Quantity v)
 
 -- Product Stats
 
 data Stats
     = Stats
-        { statsOpen   :: Open
-        , statsHigh   :: High
-        , statsLow    :: Low
-        , statsVolume :: Volume
+        { statsOpen   :: Price
+        , statsHigh   :: Price
+        , statsLow    :: Price
+        , statsClose  :: Price
+        , statsVolume :: Quantity
         }
     deriving (Show, Data, Typeable, Generic)
 
 instance NFData Stats
 instance ToJSON Stats where
     toJSON Stats{..} = object
-        [ "open"    .= show statsOpen
-        , "high"    .= show statsHigh
-        , "low"     .= show statsLow
-        , "volume"  .= show statsVolume
+        [ "open"    .= statsOpen
+        , "high"    .= statsHigh
+        , "low"     .= statsLow
+        , "close"   .= statsClose
+        , "volume"  .= statsVolume
         ]
 instance FromJSON Stats where
-    parseJSON (Object m)
-        = Stats <$> liftM (Open . read) (m .: "open")
-                <*> liftM (High . read) (m .: "high")
-                <*> liftM (Low . read) (m .: "low")
-                <*> liftM (Volume . read) (m .: "volume")
-    parseJSON _ = mzero
+    parseJSON = withObject "Stats" $ \o ->
+      Stats <$> o .: "open"
+            <*> o .: "high"
+            <*> o .: "low"
+            <*> o .: "close"
+            <*> o .: "volume"
 
 -- Exchange Currencies
 

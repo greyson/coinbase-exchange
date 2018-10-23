@@ -24,15 +24,18 @@ import           Debug.Trace
 -------------------------------------
 -- NOTE: [Connectivity Precondition]
 --
--- The parsing tests are time-based and assume we are receiving messages during the
--- time we are connected. However, those tests are NOT FAILSAFE.
+-- The parsing tests are time-based and assume we are receiving
+-- messages during the time we are connected. However, those tests are
+-- NOT FAILSAFE.
 --
--- ** If no data is received, parsing succeeds and, therefore, the parsing tests succeed **
+-- ** If no data is received, parsing succeeds and, therefore, the
+-- ** parsing tests succeed **
 --
--- To ensure this unsafe behavior does not go unnoticed (we thinking we are
--- parsing correctly when, in fact, we are not parsing anything at all),
--- We first verify we can receive at least 20 messages (i.e. a fixed minimum number)
--- from the socket, before running the parsing tests.
+-- To ensure this unsafe behavior does not go unnoticed (we thinking
+-- we are parsing correctly when, in fact, we are not parsing anything
+-- at all), We first verify we can receive at least 20 messages
+-- (i.e. a fixed minimum number) from the socket, before running the
+-- parsing tests.
 -------------------------------------
 
 tests :: ExchangeConf -> ProductId -> TestTree

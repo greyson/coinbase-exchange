@@ -21,6 +21,7 @@ import           Data.Text           (Text)
 import qualified Data.Text           as T
 import           Data.Time
 import           Data.UUID
+import           Data.Void
 import           Data.Word
 import           GHC.Generics
 import           Text.Read           (readMaybe)
@@ -32,15 +33,34 @@ newtype ProductId = ProductId { unProductId :: Text }
 
 instance UrlEncode ProductId where urlParam = T.unpack . unProductId
 
-newtype Price = Price { unPrice :: CoinScientific }
-    deriving (Eq, Ord, Num, Fractional, Real, RealFrac, Read, Data, Typeable, Generic, NFData, Hashable, FromJSON)
+newtype Price = Price { unPrice :: Scientific }
+  deriving ( Eq, Ord, Num, Fractional, Real, RealFrac, Show, Read
+           , Data, Typeable, Generic, NFData, Hashable )
 instance ToJSON Price where
-    toJSON (Price (CoinScientific v)) = String . T.pack . formatScientific Fixed Nothing $ v
-instance Show Price where
-    show (Price (CoinScientific v)) = formatScientific Fixed Nothing v
+  toJSON v =
+    String . T.pack . formatScientific Fixed Nothing . unPrice $ v
+instance FromJSON Price where
+  parseJSON = withText "Price" $ \t ->
+    maybe (fail $ "Could not parse price: " ++ T.unpack t)
+          (pure . Price)
+          $ readMaybe (T.unpack t)
+
+newtype Quantity = Quantity { unQuantity :: Scientific }
+  deriving ( Eq, Ord, Num, Fractional, Real, RealFrac, Show, Read
+           , Data, Typeable, Generic, NFData, Hashable )
+instance ToJSON Quantity where
+  toJSON v =
+    String . T.pack . formatScientific Fixed Nothing . unQuantity $ v
+instance FromJSON Quantity where
+  parseJSON = withText "Price" $ \t ->
+    maybe (fail $ "Could not parse price: " ++ T.unpack t)
+          (pure . Quantity)
+          $ readMaybe (T.unpack t)
+
 
 newtype Size = Size { unSize :: CoinScientific }
-    deriving (Eq, Ord, Num, Fractional, Real, RealFrac, Read, Data, Typeable, Generic, NFData, Hashable, FromJSON)
+    deriving ( Eq, Ord, Num, Fractional, Real, RealFrac
+             , Read, Data, Typeable, Generic, NFData, Hashable, FromJSON)
 instance ToJSON Size where
     toJSON (Size (CoinScientific v)) = String . T.pack . formatScientific Fixed Nothing $ v
 instance Show Size where
@@ -126,7 +146,8 @@ instance UrlEncode OrderStatus where
 --
 
 newtype ClientOrderId = ClientOrderId { unClientOrderId :: UUID }
-    deriving (Eq, Ord, Show, Read, Data, Typeable, Generic, NFData, Hashable, FromJSON, ToJSON)
+    deriving ( Eq, Ord, Show, Read, Data, Typeable, Generic
+             , NFData, Hashable, FromJSON, ToJSON)
 
 --
 
@@ -143,16 +164,22 @@ instance FromJSON Reason where
 ----
 
 newtype CoinScientific = CoinScientific { unCoinScientific :: Scientific }
-    deriving (Eq, Ord, Num, Fractional, Real, RealFrac, Show, Read, Data, Typeable, NFData, Hashable)
+    deriving ( Eq, Ord, Num, Fractional, Real, RealFrac, Show
+             , Read, Data, Typeable, NFData, Hashable)
 
 -- Shows 8 decimal places (needs to be adapted for prices and costs in USD)
 instance ToJSON CoinScientific where
-    toJSON (CoinScientific v) = String . T.pack . formatScientific Fixed (Just 8) $ v
+    toJSON (CoinScientific v) =
+      String . T.pack . formatScientific Fixed (Just 8) $ v
 instance FromJSON CoinScientific where
     parseJSON = withText "CoinScientific" $ \t ->
         case readMaybe (T.unpack t) of
             Just  n -> pure $ CoinScientific n
             Nothing -> fail "Could not parse string scientific."
+
+data Empty = Empty
+instance FromJSON Empty where
+  parseJSON = withObject "Empty" $ \_ -> return Empty
 
 ----
 

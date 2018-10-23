@@ -183,7 +183,7 @@ instance FromJSON OrderCancelAfter where
     parseJSON _ = mzero
 
 data SelfTrade
-    = DecrementAndCancel
+    = DecreaseAndCancel
     | CancelOldest
     | CancelNewest
     | CancelBoth
@@ -192,12 +192,12 @@ data SelfTrade
 instance NFData SelfTrade
 instance Hashable SelfTrade
 instance ToJSON SelfTrade where
-    toJSON DecrementAndCancel = String "dc"
+    toJSON DecreaseAndCancel  = String "dc"
     toJSON CancelOldest       = String "co"
     toJSON CancelNewest       = String "cn"
     toJSON CancelBoth         = String "cb"
 instance FromJSON SelfTrade where
-    parseJSON (String "dc") = return DecrementAndCancel
+    parseJSON (String "dc") = return DecreaseAndCancel
     parseJSON (String "co") = return CancelOldest
     parseJSON (String "cn") = return CancelNewest
     parseJSON (String "cb") = return CancelBoth
@@ -357,7 +357,7 @@ data Order
 instance NFData Order
 instance ToJSON Order where
     toJSON LimitOrder{..} = object
-        [ "type" .= ("limit" :: Text)
+        [ "type"          .= ("limit" :: Text)
         , "id"            .= orderId
         , "product_id"    .= orderProductId
         , "status"        .= orderStatus
@@ -426,7 +426,7 @@ instance FromJSON Order where
                 <$> m .: "id"
                 <*> m .: "product_id"
                 <*> m .: "status"
-                <*> m .: "stp"
+                <*> m .:? "stp" .!= DecreaseAndCancel
                 <*> m .: "settled"
                 <*> m .: "side"
                 <*> m .: "created_at"

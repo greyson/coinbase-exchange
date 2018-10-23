@@ -34,7 +34,7 @@ makeRequest :: (ToJSON body)
             => ExchangeConf -> I.Request body response
             -> UTCTime -> HTTP.Request
 makeRequest conf r timestamp
-  | reqSigning r = signMessage conf False params req timestamp
+  | reqSigning r = signMessage conf fullpath req timestamp
   | otherwise    = req
   where
     req = encodeBody (reqBody r) emptyReq
@@ -43,13 +43,39 @@ makeRequest conf r timestamp
       , HTTP.requestHeaders = [ ("user-agent", "haskell-simple")
                               , ("accept", "application/json") ]
       }
-    url = concat [ endpoint, reqPath r, params ]
+    url = concat [ endpoint, fullpath ]
+    fullpath = concat [ reqPath r, params ]
     endpoint = endpointRest $ apiType conf
     params
       | null (reqParams r) = ""
-      | otherwise = intercalate "&"
+      | otherwise = ("?" ++) $ intercalate "&"
         $ map (\(k,v) -> k ++ "=" ++ deUrlEncode v)
         $ reqParams r
+
+signMessage conf p req timestamp =
+  case authToken conf of
+    Nothing -> error "Coinbase Authentication information required."
+    Just tok ->
+      let
+        time = CBS.pack $ show $ round $ utcTimeToPOSIXSeconds timestamp
+        presign = CBS.concat [ time, HTTP.method req, CBS.pack p
+                             , pullBody (HTTP.requestBody req) ]
+        signature = --trace ("signing " ++ CBS.unpack presign) $
+                    Base64.encode $ toBytes $
+                    (hmac (secret tok) presign :: HMAC SHA256)
+      in
+         req{ HTTP.requestHeaders = HTTP.requestHeaders req ++
+              [ ("CB-ACCESS-KEY", key tok)
+              , ("CB-ACCESS-SIGN", signature)
+              , ("CB-ACCESS-TIMESTAMP", time)
+              , ("CB-ACCESS-PASSPHRASE", passphrase tok)
+              ]
+            }
+
+  where pullBody (HTTP.RequestBodyBS  b) = b
+        pullBody (HTTP.RequestBodyLBS b) = LBS.toStrict b
+        pullBody _                  =
+          error "Need a bytestring body for authentication"
 
 encodeBody :: (ToJSON a) => Maybe a -> HTTP.Request -> HTTP.Request
 encodeBody Nothing  r = r
@@ -58,32 +84,3 @@ encodeBody (Just a) r  = r
       [ ("content-type", "application/json") ]
     , HTTP.requestBody = HTTP.RequestBodyBS $ LBS.toStrict $ encode a
     }
-
-signMessage conf isForExchange p req timestamp =
-  case authToken conf of
-    Nothing -> error "Coinbase Authentication information required."
-    Just tok ->
-      let
-        time = CBS.pack $ show $ round $ utcTimeToPOSIXSeconds timestamp
-        presign = CBS.concat [ time, HTTP.method req, CBS.pack p
-                             , pullBody (HTTP.requestBody req) ]
-        signature = if isForExchange
-          then Base64.encode $ toBytes $
-               (hmac (secret tok) presign :: HMAC SHA256)
-          else digestToHexByteString $ hmacGetDigest
-               (hmac (Base64.encode $ secret tok) presign :: HMAC SHA256)
-      in
-         req{ HTTP.requestHeaders = HTTP.requestHeaders req ++
-              [ ("cb-access-key", key tok)
-              , ("cb-access-sign", signature)
-              , ("cb-access-timestamp", time)
-              , if isForExchange
-                then ("cb-access-passphrase", passphrase tok)
-                else ("cb-version", "2016-05-11")
-              ]
-            }
-
-  where pullBody (HTTP.RequestBodyBS  b) = b
-        pullBody (HTTP.RequestBodyLBS b) = LBS.toStrict b
-        pullBody _                  =
-          error "Need a bytestring body for authentication"

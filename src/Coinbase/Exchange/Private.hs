@@ -30,7 +30,7 @@ import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.Trans.Resource
 import           Data.Char
-import           Data.List
+import           Data.List                       hiding (delete)
 import qualified Data.Text                       as T
 import           Data.UUID
 
@@ -42,10 +42,14 @@ import           Coinbase.Exchange.Types.Private
 
 import           Network.HTTP.Types (StdMethod(..))
 
+get :: String -> Maybe a -> Request a b
 get = request endpointRest GET True
 
 post :: String -> Maybe a -> Request a b
 post = request endpointRest POST True
+
+delete :: String -> Maybe a -> Request a b
+delete = request endpointRest DELETE True
 
 -- Accounts
 
@@ -56,7 +60,7 @@ getAccount :: AccountId -> Request () Account
 getAccount i = get ("/accounts/" ++ urlParam i) Nothing
 
 getAccountLedger :: AccountId -> Request () [Entry]
-getAccountLedger i = get ("/accounts/" ++ urlParam i) Nothing
+getAccountLedger i = get ("/accounts/" ++ urlParam i ++ "/ledger") Nothing
 
 getAccountHolds :: AccountId -> Request () [Hold]
 getAccountHolds i = get ("/accounts/" ++ urlParam i ++ "/holds") Nothing
@@ -66,8 +70,8 @@ getAccountHolds i = get ("/accounts/" ++ urlParam i ++ "/holds") Nothing
 createOrder :: NewOrder -> Request NewOrder OrderConfirmation
 createOrder o = post "/orders" (Just o)
 
-cancelOrder :: OrderId -> Request () Void
-cancelOrder o = post ("/orders/" ++ urlParam o) Nothing
+cancelOrder :: OrderId -> Request () [OrderId]
+cancelOrder o = delete ("/orders/" ++ urlParam o) Nothing
 
 cancelAllOrders :: Maybe ProductId -> Request () [OrderId]
 cancelAllOrders prodId = post "/orders" Nothing

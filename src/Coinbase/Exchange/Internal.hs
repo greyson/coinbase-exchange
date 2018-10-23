@@ -35,11 +35,11 @@ data ApiType
     | Live
     deriving (Show)
 
-endpointRest Sandbox = "https://api-public.sandbox.gdax.com"
-endpointRest Live    = "https://api.gdax.com"
+endpointRest Sandbox = "https://api-public.sandbox.pro.coinbase.com"
+endpointRest Live    = "https://api.pro.coinbase.com"
 
-endpointSocket Sandbox = "ws-feed-public.sandbox.gdax.com"
-endpointSocket Live    = "ws-feed.gdax.com"
+endpointSocket Sandbox = "ws-feed-public.sandbox.pro.coinbase.com"
+endpointSocket Live    = "ws-feed.pro.coinbase.com"
 
 -- Coinbase needs to provide real BTC transfers through the exchange
 -- API soon, making 2 API calls with 2 sets of authentication
@@ -69,10 +69,6 @@ instance UrlEncode BS.ByteString where
   urlParam = urlParam . decodeUtf8
 
 newtype UrlEncoded = UrlEncoded { deUrlEncode :: String }
-
-data Void = Void
-instance FromJSON Void where
-  parseJSON = withObject "Void" $ \_ -> return Void
 
 -- WARNING: Does not escape, should be unnecessary
 urlEncode :: UrlEncode a => a -> UrlEncoded

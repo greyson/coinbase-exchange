@@ -17,10 +17,6 @@ module Coinbase.Exchange.Types
     , endpointSocket
     , endpointRealRest
 
-    , Key
-    , Secret
-    , Passphrase
-
     , Token
     , key
     , secret
@@ -28,16 +24,6 @@ module Coinbase.Exchange.Types
     , mkToken
 
     , ExchangeConf (..)
-    , ExchangeFailure (..)
-
-    , Exchange
-    , ExchangeT
-    , ExceptT
-    , runExchange
-    , execExchange
-    , execExchangeT
-
-    , getManager
     ) where
 
 import           Coinbase.Exchange.Internal
@@ -63,10 +49,6 @@ website = "https://public.sandbox.gdax.com"
 
 -- Monad Stack
 
-type Key        = ByteString
-type Secret     = ByteString
-type Passphrase = ByteString
-
 data Token
     = Token
         { key        :: ByteString
@@ -74,10 +56,11 @@ data Token
         , passphrase :: ByteString
         }
 
-mkToken :: Key -> Secret -> Passphrase -> Either String Token
-mkToken k s p = case Base64.decode s of
-                    Right s' -> Right $ Token k s' p
-                    Left  e  -> Left e
+mkToken :: ByteString -- ^ Key
+        -> ByteString -- ^ Secret
+        -> ByteString -- ^ Passphrase
+        -> Either String Token
+mkToken k s p = Token k <$> Base64.decode s <*> pure p
 
 data ExchangeConf
     = ExchangeConf
@@ -85,40 +68,3 @@ data ExchangeConf
         , authToken :: Maybe Token
         , apiType   :: ApiType
         }
-
-data ExchangeFailure = ParseFailure Text
-                     | ApiFailure Text
-                     | AuthenticationRequiredFailure Text
-                     | AuthenticationRequiresByteStrings
-                     deriving (Show, Data, Typeable, Generic)
-
-instance Exception ExchangeFailure
-
-type Exchange a = ExchangeT IO a
-
-newtype ExchangeT m a = ExchangeT {
-  unExchangeT :: ReaderT ExchangeConf (ExceptT ExchangeFailure m) a }
-  deriving ( Functor, Applicative, Monad, MonadIO, MonadThrow
-           , MonadError ExchangeFailure
-           , MonadReader ExchangeConf
-           )
-
-runExchange :: ExchangeConf -> Exchange a -> IO (Either ExchangeFailure a)
-runExchange conf = runExceptT . flip runReaderT conf . unExchangeT
-
-execExchange :: ExchangeConf -> Exchange a -> IO a
-execExchange = execExchangeT
-
-execExchangeT :: (MonadThrow m) => ExchangeConf -> ExchangeT m a -> m a
-execExchangeT conf act = do
-    v <- runExceptT . flip runReaderT conf . unExchangeT $ act
-    case v of
-        Left er -> throwM er
-        Right v -> return v
-
--- Utils
-
-getManager :: (MonadReader ExchangeConf m) => m Manager
-getManager = do
-        conf <- ask
-        return $ manager conf

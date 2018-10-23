@@ -48,6 +48,7 @@ get path = request endpointRest GET False path Nothing
 
 -- Products
 
+getProducts :: Request () [Product]
 getProducts = get "/products"
 
 -- Order Book
@@ -76,19 +77,18 @@ getTrades p = get ("/products/" ++ urlParam p ++ "/trades")
 -- | Currently Broken:
 -- coinbase api doesn't return valid ISO 8601 dates for this route.
 
-newtype BrokenUTCTime = BrokenUTCTime { realTime :: UTCTime }
-instance UrlEncode BrokenUTCTime where
-  urlParam (BrokenUTCTime t) = formatTime defaultTimeLocale "%FT%T." t
+newtype ISOTime = ISOTime { fixUTCTime :: UTCTime }
+instance UrlEncode ISOTime where
+  urlParam (ISOTime t) = formatTime defaultTimeLocale "%FT%TZ" t
 
-type StartTime  = UTCTime
-type EndTime    = UTCTime
-type Scale      = Int
-
-getHistory :: ProductId -> Maybe StartTime -> Maybe EndTime -> Maybe Scale
+getHistory :: ProductId
+           -> Maybe UTCTime -- ^ Start time
+           -> Maybe UTCTime -- ^ End time
+           -> Maybe Int     -- ^ Interval
            -> Request () [Candle]
 getHistory p start end scale = get ("/products/" ++ urlParam p ++ "/candles")
-  .&? (      "start", BrokenUTCTime <$> start)
-  .&? (        "end", BrokenUTCTime <$> end)
+  .&? (      "start", ISOTime <$> start)
+  .&? (        "end", ISOTime <$> end)
   .&? ("granularity", scale)
 
 -- Product Stats
