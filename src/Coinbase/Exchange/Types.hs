@@ -28,16 +28,12 @@ module Coinbase.Exchange.Types
 
 import           Coinbase.Exchange.Internal
 import           Control.Applicative
-import           Control.Monad.Base
-import           Control.Monad.Catch
-import           Control.Monad.Except
-import           Control.Monad.Reader
 import           Data.ByteString
 import qualified Data.ByteString.Base64       as Base64
 import           Data.Data
 import           Data.Text                    (Text)
 import           GHC.Generics
-import           Network.HTTP.Conduit
+import           Network.HTTP.Client
 
 -- API URLs
 

@@ -17,19 +17,13 @@ import           Coinbase.Exchange.Types.MarketData
 import           Coinbase.Exchange.Types.Private
 import           Coinbase.Exchange.Rest
 import           Control.Exception            (Exception, IOException)
-import           Control.Monad.Catch
+import           Control.Monad.IO.Class       (liftIO)
 import           Control.Monad.Trans.Except
-import           Control.Monad.Reader
-import           Control.Monad.Trans.Resource
 import           Data.Aeson
 import           Data.Aeson.Parser
 import           Data.Attoparsec.ByteString
 import qualified Data.ByteString              as BS
 import qualified Data.ByteString.Lazy         as LBS
-import           Data.Conduit
-import qualified Data.Conduit.Combinators     as CC
-import           Data.Conduit.Attoparsec
-import qualified Data.Conduit.Binary          as CB
 import           Data.Data                    (Data, Typeable)
 import           Data.Text                    (Text)
 import qualified Data.Text                    as T

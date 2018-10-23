@@ -10,7 +10,7 @@ module Coinbase.Exchange.Types.MarketData where
 
 import           Control.Applicative
 import           Control.DeepSeq
-import           Control.Monad.Except
+import           Control.Monad                (mzero)
 import           Data.Aeson.Casing
 import           Data.Aeson.Types
 import           Data.Data

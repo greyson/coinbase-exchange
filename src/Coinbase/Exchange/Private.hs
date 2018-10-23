@@ -26,9 +26,6 @@ module Coinbase.Exchange.Private
     , module Coinbase.Exchange.Types.Private
     ) where
 
-import           Control.Monad.Except
-import           Control.Monad.Reader
-import           Control.Monad.Trans.Resource
 import           Data.Char
 import           Data.List                       hiding (delete)
 import qualified Data.Text                       as T

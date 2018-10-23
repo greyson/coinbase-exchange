@@ -23,9 +23,6 @@ module Coinbase.Exchange.MarketData
     ) where
 
 import           Coinbase.Exchange.Internal
-import           Control.Monad.Except
-import           Control.Monad.Reader
-import           Control.Monad.Trans.Resource
 import           Data.List
 import qualified Data.Text                          as T
 import           Data.Time

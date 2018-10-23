@@ -7,6 +7,7 @@ import           Control.Concurrent
 import           Control.Monad
 import           Data.Aeson
 import qualified Data.ByteString.Char8           as CBS
+import           Data.Char                       (toUpper)
 import           Data.Maybe
 import           Data.Time
 import           Data.UUID
@@ -15,6 +16,7 @@ import           Network.HTTP.Client.TLS
 import qualified Network.WebSockets              as WS
 import           System.Environment
 
+import           Coinbase.Exchange
 import           Coinbase.Exchange.MarketData
 import           Coinbase.Exchange.Private
 import           Coinbase.Exchange.Socket
@@ -35,25 +37,29 @@ start = Just $ parseTimeOrError True defaultTimeLocale "%FT%X%z" "2015-04-12T20:
 end :: Maybe UTCTime
 end = Just $ parseTimeOrError True defaultTimeLocale "%FT%X%z" "2015-04-23T20:22:37+0000"
 
-withCoinbase :: Exchange a -> IO a
+parseUseSandbox at = case map toUpper at of
+  "TRUE"  -> Right Sandbox
+  "FALSE" -> Right Live
+  _other  -> Left $ "Sandbox configuration must be either TRUE or FALSE"
+
+getEnvCBS = liftM CBS.pack . getEnv
+
+withCoinbase :: (ExchangeConf -> IO a) -> IO a
 withCoinbase act = do
-        mgr     <- newManager tlsManagerSettings
-        tKey    <- liftM CBS.pack $ getEnv "GDAX_KEY"
-        tSecret <- liftM CBS.pack $ getEnv "GDAX_SECRET"
-        tPass   <- liftM CBS.pack $ getEnv "GDAX_PASSPHRASE"
+  -- Parse the api type from the environment
+  apiType <- getEnv "GDAX_SANDBOX"
+    >>= either error return . parseUseSandbox
 
-        sbox    <- getEnv "GDAX_SANDBOX"
-        let apiType  = case sbox of
-                        "FALSE" -> Live
-                        "TRUE"  -> Sandbox
-                        _       -> error "Coinbase sandbox option must be either: TRUE or FALSE (all caps)"
+  -- Parse the security token from the environment
+  tok     <- mkToken <$> (getEnvCBS "GDAX_KEY")
+                     <*> (getEnvCBS "GDAX_SECRET")
+                     <*> (getEnvCBS "GDAX_PASSPHRASE")
+    >>= either (error . show) return
 
-        case mkToken tKey tSecret tPass of
-            Right tok -> do res <- runExchange (ExchangeConf mgr (Just tok) apiType) act
-                            case res of
-                                Right s -> return s
-                                Left  f -> error $ show f
-            Left   er -> error $ show er
+  -- Create a new HTTP manager (TLS settings)
+  mgr <- newManager tlsManagerSettings
+
+  act (ExchangeConf mgr (Just tok) apiType)
 
 printSocket :: IO ()
 printSocket = subscribe Live [btc] $ \conn -> do
