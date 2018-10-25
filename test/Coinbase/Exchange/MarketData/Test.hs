@@ -12,9 +12,6 @@ import           Test.Tasty
 import           Test.Tasty.HUnit
 
 import           Coinbase.Exchange
-import           Coinbase.Exchange.MarketData
-import           Coinbase.Exchange.Types
-import           Coinbase.Exchange.Types.Core
 
 --------------------------------
 -- NOTE: ["case_parse" test cases]

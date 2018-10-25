@@ -22,17 +22,17 @@ library
     default-language:   Haskell2010
 
     exposed-modules:    Coinbase.Exchange
-                      , Coinbase.Exchange.MarketData
-                      , Coinbase.Exchange.Private
-                      , Coinbase.Exchange.Socket
-                      , Coinbase.Exchange.Types.Core
-                      , Coinbase.Exchange.Types.MarketData
-                      , Coinbase.Exchange.Types.Private
                       , Coinbase.Exchange.Types.Socket
-                      , Coinbase.Exchange.Types
+                      , Coinbase.Exchange.Socket
 
     other-modules:      Coinbase.Exchange.Rest
                       , Coinbase.Exchange.Internal
+                      , Coinbase.Exchange.MarketData
+                      , Coinbase.Exchange.Private
+                      , Coinbase.Exchange.Types
+                      , Coinbase.Exchange.Types.Core
+                      , Coinbase.Exchange.Types.MarketData
+                      , Coinbase.Exchange.Types.Private
 
     build-depends:      base    >= 4 && < 5
                       , aeson
@@ -41,6 +41,7 @@ library
                       , base64-bytestring
                       , byteable
                       , bytestring
+                      , containers
                       , cryptohash
                       , deepseq
                       , exceptions
@@ -105,6 +106,7 @@ test-suite test-coinbase
                       , async
                       , bytestring
                       , coinbase-exchange
+                      , http-client
                       , http-client-tls
                       , old-locale
                       , random

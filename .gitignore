@@ -9,4 +9,5 @@ dist/
 
 *.swp
 
-credentials
+/result
+/build.nix

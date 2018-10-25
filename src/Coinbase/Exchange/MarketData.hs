@@ -18,8 +18,6 @@ module Coinbase.Exchange.MarketData
 
     , getCurrencies
     , getExchangeTime
-
-    , module Coinbase.Exchange.Types.MarketData
     ) where
 
 import           Coinbase.Exchange.Internal

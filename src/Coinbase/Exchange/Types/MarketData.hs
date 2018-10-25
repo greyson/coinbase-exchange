@@ -24,29 +24,11 @@ import qualified Data.Vector                  as V
 import           Data.Word
 import           GHC.Generics
 
+import           Coinbase.Exchange.Internal
 import           Coinbase.Exchange.Types.Core
 
--- Products
-
-data Product
-    = Product
-        { prodId             :: ProductId
-        , prodBaseCurrency   :: CurrencyId
-        , prodQuoteCurrency  :: CurrencyId
-        , prodBaseMinSize    :: CoinScientific
-        , prodBaseMaxSize    :: CoinScientific
-        , prodQuoteIncrement :: CoinScientific
-        , prodDisplayName    :: Text
-        }
-    deriving (Show, Data, Typeable, Generic)
-
-instance NFData Product
-instance ToJSON Product where
-    toJSON = genericToJSON coinbaseAesonOptions
-instance FromJSON Product where
-    parseJSON = genericParseJSON coinbaseAesonOptions
-
--- Order Book
+--
+-- Book: Order Book
 
 data Book a
     = Book
@@ -71,52 +53,8 @@ instance (ToJSON a) => ToJSON (BookItem a) where
 instance (FromJSON a) => FromJSON (BookItem a) where
     parseJSON = genericParseJSON defaultOptions
 
--- Product Ticker
-
-data Tick
-    = Tick
-        { tickTradeId :: Word64
-        , tickPrice   :: Price
-        , tickSize    :: Size
-        , tickTime    :: Maybe UTCTime
-        }
-    deriving (Show, Data, Typeable, Generic)
-
-instance NFData Tick
-instance ToJSON Tick where
-    toJSON = genericToJSON coinbaseAesonOptions
-instance FromJSON Tick where
-    parseJSON = genericParseJSON coinbaseAesonOptions
-
--- Product Trades
-
-data Trade
-    = Trade
-        { tradeTime    :: UTCTime
-        , tradeTradeId :: TradeId
-        , tradePrice   :: Price
-        , tradeSize    :: Size
-        , tradeSide    :: Side
-        }
-    deriving (Show, Data, Typeable, Generic)
-
-instance NFData Trade
-instance ToJSON Trade where
-    toJSON Trade{..} = object [ "time"      .= tradeTime
-                              , "trade_id"  .= tradeTradeId
-                              , "price"     .= tradePrice
-                              , "size"      .= tradeSize
-                              , "side"      .= tradeSide
-                              ]
-instance FromJSON Trade where
-    parseJSON (Object m) = Trade <$> m .: "time"
-                                 <*> m .: "trade_id"
-                                 <*> m .: "price"
-                                 <*> m .: "size"
-                                 <*> m .: "side"
-    parseJSON _ = mzero
-
--- Historic Rates (Candles)
+--
+-- Candle: Historic Rates
 
 data Candle = Candle
   { cUTCTime :: UTCTime
@@ -136,7 +74,60 @@ instance FromJSON Candle where
               (Price lo) (Price hi) (Price op) (Price cl)
               (Quantity v)
 
--- Product Stats
+--
+-- Currency: Exchange Currencies
+
+data Currency
+    = Currency
+        { curId      :: CurrencyId
+        , curName    :: Text
+        , curMinSize :: CoinScientific
+        }
+    deriving (Show, Data, Typeable, Generic)
+
+instance NFData Currency
+instance ToJSON Currency where
+    toJSON = genericToJSON coinbaseAesonOptions
+instance FromJSON Currency where
+    parseJSON = genericParseJSON coinbaseAesonOptions
+
+--
+-- ExchangeTime: Exchange Time
+
+data ExchangeTime
+    = ExchangeTime
+        { timeIso   :: UTCTime
+        , timeEpoch :: Double
+        }
+    deriving (Show, Data, Typeable, Generic)
+
+instance ToJSON ExchangeTime where
+    toJSON = genericToJSON coinbaseAesonOptions
+instance FromJSON ExchangeTime where
+    parseJSON = genericParseJSON coinbaseAesonOptions
+--
+-- Product: Products
+
+data Product
+    = Product
+        { prodId             :: ProductId
+        , prodBaseCurrency   :: CurrencyId
+        , prodQuoteCurrency  :: CurrencyId
+        , prodBaseMinSize    :: CoinScientific
+        , prodBaseMaxSize    :: CoinScientific
+        , prodQuoteIncrement :: CoinScientific
+        , prodDisplayName    :: Text
+        }
+    deriving (Show, Data, Typeable, Generic)
+
+instance NFData Product
+instance ToJSON Product where
+    toJSON = genericToJSON coinbaseAesonOptions
+instance FromJSON Product where
+    parseJSON = genericParseJSON coinbaseAesonOptions
+
+--
+-- Stats: Product Stats
 
 data Stats
     = Stats
@@ -165,32 +156,48 @@ instance FromJSON Stats where
             <*> o .: "close"
             <*> o .: "volume"
 
--- Exchange Currencies
+-- Tick: Product Ticker
 
-data Currency
-    = Currency
-        { curId      :: CurrencyId
-        , curName    :: Text
-        , curMinSize :: CoinScientific
+data Tick
+    = Tick
+        { tickTradeId :: Word64
+        , tickPrice   :: Price
+        , tickSize    :: Size
+        , tickTime    :: Maybe UTCTime
         }
     deriving (Show, Data, Typeable, Generic)
 
-instance NFData Currency
-instance ToJSON Currency where
+instance NFData Tick
+instance ToJSON Tick where
     toJSON = genericToJSON coinbaseAesonOptions
-instance FromJSON Currency where
+instance FromJSON Tick where
     parseJSON = genericParseJSON coinbaseAesonOptions
 
--- Exchange Time
+--
+-- Trade: Product Trades
 
-data ExchangeTime
-    = ExchangeTime
-        { timeIso   :: UTCTime
-        , timeEpoch :: Double
+data Trade
+    = Trade
+        { tradeTime    :: UTCTime
+        , tradeTradeId :: TradeId
+        , tradePrice   :: Price
+        , tradeSize    :: Size
+        , tradeSide    :: Side
         }
     deriving (Show, Data, Typeable, Generic)
 
-instance ToJSON ExchangeTime where
-    toJSON = genericToJSON coinbaseAesonOptions
-instance FromJSON ExchangeTime where
-    parseJSON = genericParseJSON coinbaseAesonOptions
+instance NFData Trade
+instance ToJSON Trade where
+    toJSON Trade{..} = object [ "time"      .= tradeTime
+                              , "trade_id"  .= tradeTradeId
+                              , "price"     .= tradePrice
+                              , "size"      .= tradeSize
+                              , "side"      .= tradeSide
+                              ]
+instance FromJSON Trade where
+  parseJSON = withObject "Trade" $ \m ->
+    Trade <$> m .: "time"
+          <*> m .: "trade_id"
+          <*> m .: "price"
+          <*> m .: "size"
+          <*> m .: "side"

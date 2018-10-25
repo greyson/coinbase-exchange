@@ -11,6 +11,7 @@ import           Network.Socket
 import qualified Network.WebSockets             as WS
 import           Wuss
 -------------------------------------------------------------------------------
+import           Coinbase.Exchange.Internal
 import           Coinbase.Exchange.Types
 import           Coinbase.Exchange.Types.Core
 import           Coinbase.Exchange.Types.Socket

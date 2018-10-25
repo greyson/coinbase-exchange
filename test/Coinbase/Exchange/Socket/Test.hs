@@ -12,10 +12,8 @@ import           Test.Tasty.HUnit
 
 import qualified Network.WebSockets             as WS
 
-import           Coinbase.Exchange.Private
+import           Coinbase.Exchange
 import           Coinbase.Exchange.Socket
-import           Coinbase.Exchange.Types
-import           Coinbase.Exchange.Types.Core
 
 import qualified Coinbase.Exchange.Private.Test as P
 

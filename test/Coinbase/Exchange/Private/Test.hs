@@ -24,14 +24,8 @@ import           System.Random
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
-import           Coinbase.Exchange
-import qualified Coinbase.Exchange as I
-import           Coinbase.Exchange.Private
-import           Coinbase.Exchange.Types
-import           Coinbase.Exchange.Types.Core
-import           Coinbase.Exchange.Types.Private
+import           Coinbase.Exchange as I
 
-import           Network.HTTP.Conduit
 import           System.Environment
 import qualified Data.ByteString.Char8             as CBS
 
@@ -168,7 +162,7 @@ creatNewLimitOrder = do
     -- CAREFUL CHANGING THESE VALUES IF YOU PERFORM TESTING IN THE
     -- LIVE ENVIRONMENT. YOU MAY LOOSE MONEY.
     return NewLimitOrder
-        { noSize      = 0.01 + Size (CoinScientific $ fromInteger sz / 1000000 )
+        { noSize      = 0.01 + (Quantity $ fromInteger sz / 1000000 )
         , noPrice     = 10.36
         , noProductId = "BTC-USD"
         , noSide      = Buy

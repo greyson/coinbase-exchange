@@ -1,18 +1,15 @@
 module Coinbase.Exchange.Internal where
 
-import Data.Aeson
-import Data.Aeson.Types
-import Data.List
-  ( intercalate )
-import Data.Scientific
-import Data.Text
-  ( Text, pack, unpack )
-import Data.Text.Encoding
-  ( decodeUtf8 )
-import Network.HTTP.Types
-  ( StdMethod )
-
-import qualified Data.ByteString as BS
+import           Data.Aeson
+import           Data.Aeson.Casing
+import           Data.Aeson.Types
+import qualified Data.ByteString       as BS
+import           Data.Char
+import           Data.List             ( intercalate )
+import           Data.Scientific
+import           Data.Text             ( Text, pack, unpack )
+import           Data.Text.Encoding    ( decodeUtf8 )
+import           Network.HTTP.Types    ( StdMethod )
 
 data Request a response = Request
   { reqEndpoint :: ApiType -> String
@@ -87,3 +84,13 @@ req .& (n, v) =
 (.&?) :: (UrlEncode v) => Request a r -> (String, Maybe v) -> Request a r
 req .&? (_, Nothing) = req
 req .&? (n, Just v)  = req .& (n, v)
+
+----
+
+coinbaseAesonOptions :: Options
+coinbaseAesonOptions = (aesonPrefix snakeCase)
+    { constructorTagModifier = map toLower
+    , sumEncoding = defaultTaggedObject
+                        { tagFieldName = "type"
+                        }
+    }

@@ -71,7 +71,7 @@ cancelOrder :: OrderId -> Request () [OrderId]
 cancelOrder o = delete ("/orders/" ++ urlParam o) Nothing
 
 cancelAllOrders :: Maybe ProductId -> Request () [OrderId]
-cancelAllOrders prodId = post "/orders" Nothing
+cancelAllOrders prodId = delete "/orders" Nothing
   .&? ("product_id", prodId)
 
 getOrderList :: [OrderStatus] -> Request () [Order]

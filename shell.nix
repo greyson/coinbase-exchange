@@ -6,7 +6,6 @@ let
     else pkgs.haskell.packages.${compiler});
   hpkgs_std = hpkgs_base.override {
       overrides = hself: hsuper: {
-        #transformers = hsuper.transformers_0_5_5_0;
       };
     };
   hpkgs_profiled = hpkgs_std.override {
@@ -17,4 +16,4 @@ let
       };
     };
   hpkgs = if profiling then hpkgs_profiled else hpkgs_std;
-in (hpkgs.callPackage ./default.nix {}).env
+in (hpkgs.callPackage ./build.nix {}).env
